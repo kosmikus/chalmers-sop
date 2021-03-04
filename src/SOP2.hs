@@ -32,9 +32,6 @@ import Generics.SOP
 import Generics.SOP.Metadata
 import qualified GHC.Generics as GHC
 
-example_SOP :: SOP I '[ '[ Int, Bool ], '[ Char ] ]
-example_SOP = SOP (Z (I 3 :* I False :* Nil))
-
 {-
 class Generic a where
 
@@ -54,8 +51,8 @@ data Person =
 
 data Language =
     Haskell
-  | Agda
   | OCaml
+  | Agda
   deriving (Show, GHC.Generic, Generic, HasDatatypeInfo)
 
 andres :: Person
@@ -82,10 +79,6 @@ indices :: All Top xs => NP (K Int) xs
 indices =
   ana_NP (\ (K i) -> (K i, K (i + 1))) (K 0)
 
-prefix :: All Top xs => [a] -> NP (K a) xs
-prefix ys =
-  ana_NP (\ (K (x : xs)) -> (K x, K xs)) (K ys)
-
 gParseRecord :: (Generic a, Code a ~ '[ xs ], All FromField xs) => Record -> Parser a
 gParseRecord v =
   fmap (to . SOP . Z) (sequence_NP (cmap_NP (Proxy @FromField) ((v .!) . unK) indices))
@@ -101,14 +94,21 @@ constructorNames :: (Generic a, HasDatatypeInfo a) => Proxy a -> NP (K Field) (C
 constructorNames p =
   map_NP (K . toField . constructorName) (constructorInfo (datatypeInfo p))
 
-gParseField :: forall a . (Generic a, All ((~) '[]) (Code a)) => NP (K Field) (Code a) -> Field -> Parser a
+gParseField ::
+  forall a . (Generic a, All ((~) '[]) (Code a)) =>
+  NP (K Field) (Code a) -> Field -> Parser a
 gParseField names s =
   let
     parsers :: NP (K (Parser a)) (Code a)
-    parsers = zipWith_NP (mapKKK (\ name elt -> guard (s == name) >> pure elt)) names elements
+    parsers =
+      zipWith_NP
+        (\ (K name) (K elt) -> K (guard (s == name) >> pure elt))
+        names elements
   in
     asum (collapse_NP parsers)
 
-gToField :: forall a . (Generic a, All ((~) '[]) (Code a)) => NP (K Field) (Code a) -> a -> Field
+gToField ::
+  forall a . (Generic a, All ((~) '[]) (Code a)) =>
+  NP (K Field) (Code a) -> a -> Field
 gToField names x =
   collapse_NS (hzipWith const names (unSOP (from x)))
